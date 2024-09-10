@@ -1,0 +1,197 @@
+---
+title: Effect of the Pandemic on Azithromycin Prescription in General Practices across the UK
+author: "Daramola Oluwasegun Isaac"
+date: "8/4/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# Load Packages
+```{r run-packages, message=FALSE, warning=FALSE}
+# List of required packages
+packages <- c("fpp2", "ggplot2", "tidyverse", "pandoc")
+
+# Install any missing packages
+installed_packages <- packages %in% rownames(installed.packages())
+if(any(!installed_packages)) {
+  install.packages(packages[!installed_packages])
+}
+
+# Load the installed packages
+library(fpp2)
+library(ggplot2)
+library(tidyverse)
+
+```
+
+# Load Main Sheets (Data for both and Pre-covid)
+```{r load-sheets, message=FALSE, warning=FALSE}
+precovid <- read.csv("Azidata/Aziprecovid.csv", as.is = T)
+both <- read.csv("Azidata/Aziboth.csv", as.is = T)
+view(precovid)
+view(both)
+```
+
+# Convert needed data columns to time series 
+```{r convert-to-ts, message=FALSE, warning=FALSE}
+pre <- ts(precovid, start = c(2016, 5), frequency = 12)
+preazi <- ts(precovid$Azithromycin, start = c(2016, 5), frequency = 12)
+patients <- ts(precovid$Patients, start = c(2016, 5), frequency = 12)
+bothazi <- ts(both$Azithromycin, start = c(2016, 5), frequency = 12)
+```
+
+# Plot Azithromycin prescription
+```{r Plot-azithromycin-prescription, message=FALSE, warning=FALSE}
+autoplot(preazi, main = "Pre-Covid Azithromycin prescription (UK) time series")
+autoplot(bothazi, main = "Azithromycin prescription (UK) time series")
+```
+
+# Lag plot and autocorrelation
+```{r lag-plots, message=FALSE, warning=FALSE}
+preazilag <- window(preazi, start = c(2016, 5))
+gglagplot(preazilag)
+ggAcf(preazilag, lag = 44)
+
+preazidiff <- diff(preazi)
+autoplot(preazidiff, main = "Pre-Covid Azithromycin prescription (UK) monthly differences")
+ggAcf(preazidiff, lag = 44)
+
+bothazilag <- window(bothazi, start = c(2016, 5))
+gglagplot(bothazilag)
+ggAcf(bothazilag, lag = 61)
+
+bothazidiff <- diff(bothazi)
+autoplot(bothazidiff, main = "Azithromycin prescription (UK) monthly differences")
+ggAcf(bothazidiff, lag = 61)
+```
+
+# Box-Cox Transformation
+```{r Box-Cox-transformation, message=FALSE, warning=FALSE}
+
+(lambdaprecovid <- BoxCox.lambda(preazilag))
+autoplot(BoxCox(preazilag, lambdaprecovid))
+```
+
+# Residual checks
+```{r residual-checks, message=FALSE, warning=FALSE}
+preres <- residuals(naive(preazi))
+autoplot(preres) + xlab(" ") + ylab(" ") +
+  ggtitle("Residuals from naive method")
+gghistogram(preres) + ggtitle("Histogram of residuals")
+ggAcf(preres) + ggtitle("ACF of residuals")
+```
+
+# Portmanteau Tests
+```{r lPortmanteau tests, message=FALSE, warning=FALSE}
+Box.test(preres, lag = 10, fitdf = 0)
+Box.test(preres, lag = 10, fitdf = 0, type = "Lj")
+checkresiduals(naive(preazi))
+```
+
+# Basic principle forecasts
+```{r simple-forecasts, message=FALSE, warning=FALSE}
+autoplot(preazi) +
+  autolayer(meanf(preazi, h = 17),
+            series = "Mean", PI = FALSE) +
+  autolayer(naive(preazi, h = 17),
+            series = "Naive", PI = FALSE) +
+  autolayer(snaive(preazi, h = 17),
+            series = "Seasonal Naive", PI = FALSE) +
+  autolayer(snaive(preazi)) +
+  ggtitle("Forecasts for Azithromycin Prescription") +
+  xlab("Year") + ylab("Azithromycin Prescription") +
+  guides(color=guide_legend(title="Forecast"))
+```
+
+# Variable Plot Comparison
+```{r variable comparison, message=FALSE, warning=FALSE}
+autoplot(pre[, c("Azithromycin", "Patientsthousand")])
+```
+
+# Correlation Plot
+```{r correlation plot, message=FALSE, warning=FALSE}
+GGally::ggpairs(as.data.frame(pre[, c("Azithromycin", "Patientsmillion")]))
+
+pre %>% 
+  as.data.frame() %>% 
+  ggplot(aes(x = Azithromycin, y = Patientsmillion)) +
+  ylab("Patients (millions)") +
+  xlab("Azithromycin Prescription") +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)
+tslm(Patientsmillion ~ Azithromycin, data = pre)
+```
+
+# Fit regression plot for both variables
+```{r variable-regression-plot, message=FALSE, warning=FALSE}
+fit.pre <- tslm(
+  Azithromycin ~ Patients,
+  data=pre
+)
+
+autoplot(pre[, "Azithromycin"], series = "Data") +
+  autolayer(fitted(fit.pre), series = "Fitted")
+
+cbind(Data = pre[, "Azithromycin"],
+      Fitted = fitted(fit.pre)) %>% 
+  as.data.frame() %>% 
+  ggplot(aes(x=Data, y=Fitted)) +
+  geom_point() +
+  geom_abline(intercept=0, slope = 1)
+checkresiduals(fit.pre)
+
+df <- as.data.frame(pre)
+df[, "Residuals"] <- as.numeric(residuals((fit.pre)))
+ggplot(df, aes(preazi, Residuals)) +
+  geom_point()
+cbind(Fitted= fitted(fit.pre),
+      Residuals= residuals(fit.pre)) %>% 
+  as.data.frame() %>% 
+  ggplot(aes(x=Fitted, y=Residuals)) + geom_point()
+summary(fit.pre)
+CV(fit.pre)
+```
+
+# Linear Regression plot
+```{r linear-regression-plot, message=FALSE, warning=FALSE}
+prefc <- window(preazi, start = c(2016, 5))
+fit.prefc <- tslm(preazi ~ trend + season)
+fcast <- forecast(fit.prefc, h = 17)
+autoplot(fcast) +
+  autolayer(bothazi, colour = FALSE) +
+  ggtitle("Forecast of Azithromycin prescription using Linear regression") +
+  xlab("Year") + ylab(" ")
+
+summary(fit.prefc)
+CV(fit.prefc)
+
+preazi %>% decompose(type="multiplicative") %>% 
+  autoplot() + xlab("Year")
+```
+
+# Export New Prediction data
+
+After run, some off-R modification to calculate percentage change
+% Change = ((Actual Value - Predicted Value)/Actual Value) in Excel.
+Insert new columns (% change in point forecast, 95% prediction interval high and low)
+```{r export-forecast-data, message=FALSE, warning=FALSE}
+write.csv(fcast, file = "fc.csv")
+```
+
+# Load % change sheet for differences
+
+"fc.csv" file with changes now named "fc2.csv"
+```{r Percentage change, message=FALSE, warning=FALSE}
+fc <- read.csv("fc2.csv", as.is = T)
+
+percentchange <- ts(fc$PercentageChange, start = 2020, frequency = 12)
+percentdecrease <- ts(fc$PercentDecrease, start = 2020, frequency = 12)
+percentincrease <- ts(fc$PercentIncrease, start = 2020, frequency = 12)
+change <- ts(fc, start = 2020, frequency = 12)
+
+autoplot(percentchange, series = "Point Forecast") +
+  autolayer(percentdecrease, series = "95% Prediction Interval (Low)") +
+  autolayer(percentincrease, series = "95% Prediction Interval (High)") +
+  geom_hline(aes(yintercept = 0))
+```
