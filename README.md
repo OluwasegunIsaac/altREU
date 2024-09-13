@@ -6,7 +6,7 @@ In the early months of the COVID-19 pandemic, it was reported that some antibiot
 ![Aziboth Plot](https://github.com/user-attachments/assets/cea0b30a-99ae-4834-84f4-a0a931a34434)
 
 ## Methods
-To analyze the effect and possible antimicrobial resistance impact of the pandemic on Azithromycin prescription across general practices in the United Kingdom (UK), this study uses a time series decomposition modeling method to compare a predictive forecast of an uninfluenced prescription period with the actual prescription dataset during the pandemic. Similar studies utilize critical observation of trend and dataset analysis using data visualization. 
+To analyse the effect and possible antimicrobial resistance impact of the pandemic on Azithromycin prescription across general practices in the United Kingdom (UK), this study uses a time series decomposition modeling method to compare a predictive forecast of an uninfluenced prescription period with the actual prescription dataset during the pandemic. Similar studies utilize critical observation of trend and dataset analysis using data visualization. 
 ![15](https://github.com/user-attachments/assets/5bbb50f3-56c5-49fd-997a-ebfc464d1553)
 
 
